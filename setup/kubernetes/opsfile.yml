@@ -173,10 +173,15 @@ tasks:
         rm -f "{{.FILE}}"
         N=0
         RES=false
+        POD=""
         while [[ $N -lt {{.RETRY}} ]]
         do printf "\rwaiting for pod {{.SELECTOR}}: [${BAR:0:$((N++))}]"
-           if kubectl -n nuvolaris get po {{.SELECTOR}} -o jsonpath='{.items[0].metadata.name}' >{{.FILE}} 2>/dev/null
-           then RES=true ; break
+           if POD="$(kubectl -n nuvolaris get po {{.SELECTOR}} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)"
+           then
+             printf '%s' "$POD" >{{.FILE}}
+             if kubectl -n nuvolaris wait --for=condition=Ready "pod/$POD" --timeout={{.TIMEOUT}} >/dev/null 2>&1
+             then RES=true ; break
+             fi
            fi
            sleep {{.TIMEOUT}}
         done
@@ -336,7 +341,7 @@ tasks:
       - task: wait
         vars:
           OBJECT:
-            sh: echo "pod/$(cat _seaweedfs)"
+            sh: pod_name="$(cat _seaweedfs 2>/dev/null || true)"; printf 'pod/%s' "${pod_name:-_seaweedfs_pending_}"
           COND:
             sh: echo "$OPERATOR_COMPONENT_SEAWEEDFS"
       - task: wait-pod
@@ -348,7 +353,7 @@ tasks:
       - task: wait
         vars:
           OBJECT:
-            sh: echo "pod/$(cat _milvus)"
+            sh: pod_name="$(cat _milvus 2>/dev/null || true)"; printf 'pod/%s' "${pod_name:-_milvus_pending_}"
           COND:
             sh: echo "$OPERATOR_COMPONENT_MILVUS"
 
